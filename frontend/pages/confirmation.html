@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order Placed — Divya</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <span class="topbar-title">Divya</span>
+    <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()">☾</button>
+  </div>
+
+  <div class="page">
+    <div id="confirmation-content"><div class="loading">Loading...</div></div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    requireAuth();
+    const orderData = JSON.parse(localStorage.getItem('last_order') || 'null');
+    if (!orderData) { window.location.href = '/menu'; }
+    else { render(orderData); localStorage.removeItem('last_order'); localStorage.removeItem('table_number'); }
+
+    function render(data) {
+      document.getElementById('confirmation-content').innerHTML = `
+        <div class="confirmation-box">
+          <div class="confirmation-icon">✓</div>
+          <div class="confirmation-title">Payment Successful</div>
+          <div class="confirmation-sub">Your order has been sent to the kitchen.</div>
+        </div>
+        <div class="order-detail-card">
+          <div class="order-detail-row"><span class="order-detail-label">Order ID</span><span>#${data.order_id}</span></div>
+          <div class="order-detail-row"><span class="order-detail-label">Table</span><span>${data.table_number}</span></div>
+          <div class="order-detail-row"><span class="order-detail-label">Status</span><span>Confirmed</span></div>
+        </div>
+        <div class="order-detail-card">
+          ${data.items.map(i => `
+            <div class="order-detail-row">
+              <span>${i.name} × ${i.quantity}</span>
+              <span>${formatPrice(i.price_at_time * i.quantity)}</span>
+            </div>`).join('')}
+          <div class="order-detail-row"><span class="order-detail-label">Subtotal</span><span>${formatPrice(data.subtotal)}</span></div>
+          <div class="order-detail-row"><span class="order-detail-label">Tax (5%)</span><span>${formatPrice(data.tax)}</span></div>
+          <div class="order-detail-row" style="font-weight:700;"><span>Total Paid</span><span>${formatPrice(data.total)}</span></div>
+        </div>
+        <button class="btn btn-primary" onclick="window.location.href='/review?order_id=${data.order_id}'">Rate Your Order</button>
+        <div style="margin-top:12px;"><button class="btn btn-outline" onclick="newOrder()">Order More</button></div>
+        <div style="margin-top:12px;"><button class="btn btn-outline" onclick="logout()">Done / Logout</button></div>`;
+    }
+
+    function newOrder() { localStorage.removeItem('table_number'); window.location.href = '/table'; }
+    function logout() { localStorage.clear(); window.location.href = '/'; }
+  </script>
+</body>
+</html>

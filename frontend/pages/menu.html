@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Menu — Divya</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="topbar-title">Divya</span>
+      <span class="table-badge" id="table-label"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()">☾</button>
+      <button onclick="logout()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-muted);">Logout</button>
+    </div>
+  </div>
+
+  <div class="category-tabs" id="category-tabs"></div>
+  <div id="menu-container"><div class="loading">Loading menu...</div></div>
+  <div class="spacer"></div>
+
+  <div class="cart-bar" id="cart-bar" style="display:none;">
+    <button class="cart-btn" onclick="window.location.href='/cart'">
+      <span id="cart-count-label">0 items</span>
+      <span id="cart-total-label">View Cart →</span>
+    </button>
+  </div>
+
+  <!-- Item detail / reviews modal -->
+  <div class="modal-overlay" id="modal-overlay" style="display:none;" onclick="closeModal(event)">
+    <div class="modal" id="modal-box">
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    requireAuth();
+    requireTable();
+    document.getElementById('table-label').textContent = 'Table ' + getTable();
+
+    // Starter images from Unsplash (free, no auth needed)
+    const starterImages = {
+      'Veg Spring Roll'   : 'https://images.unsplash.com/photo-1548460352-aef5b3e4ee66?w=600&q=80',
+      'Paneer Tikka'      : 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=600&q=80',
+      'Chicken 65'        : 'https://images.unsplash.com/photo-1610057099431-d73a1c9d2f2f?w=600&q=80',
+      'Soup of the Day'   : 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&q=80',
+    };
+
+    let menuData = [];
+    let cart = getCart();
+    let likeData = {};
+
+    apiFetch('/menu').then(data => {
+      menuData = data;
+      renderTabs(data);
+      renderMenu(data);
+      updateCartBar();
+      loadLikes(data);
+    }).catch(() => {
+      document.getElementById('menu-container').innerHTML = '<div class="loading">Failed to load menu. Please refresh.</div>';
+    });
+
+    function loadLikes(data) {
+      const allIds = data.flatMap(c => c.items.map(i => i.id));
+      if (!allIds.length) return;
+      apiFetch('/reviews/likes?item_ids=' + allIds.join(',')).then(likes => {
+        likes.forEach(l => { likeData[l.menu_item_id] = l; });
+        likes.forEach(l => updateLikeUI(l.menu_item_id));
+      }).catch(() => {});
+    }
+
+    function renderTabs(data) {
+      document.getElementById('category-tabs').innerHTML = data.map((cat, i) =>
+        `<button class="tab-btn ${i===0?'active':''}" onclick="scrollToSection('cat-${cat.id}',this)">${cat.name}</button>`
+      ).join('');
+    }
+
+    function renderMenu(data) {
+      document.getElementById('menu-container').innerHTML = data.map(cat => `
+        <div class="menu-section" id="cat-${cat.id}">
+          <div class="section-title">${cat.name}</div>
+          ${cat.items.map(item => {
+            const isStarter = cat.name === 'Starters';
+            return isStarter ? renderItemWithImage(item) : renderItem(item);
+          }).join('')}
+        </div>`).join('');
+    }
+
+    function renderItemWithImage(item) {
+      const inCart = cart.find(c => c.menu_item_id === item.id);
+      const qty = inCart ? inCart.quantity : 0;
+      const like = likeData[item.id] || { count: 0, liked: false };
+      const imgUrl = starterImages[item.name] || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80';
+
+      return `
+        <div class="menu-item-img" id="item-${item.id}">
+          <div class="img-wrap">
+            <img src="${imgUrl}" alt="${item.name}" loading="lazy" />
+          </div>
+          <div class="img-row">
+            <div class="item-info">
+              <div class="item-header">
+                <span class="veg-dot ${item.is_veg?'veg':'nonveg'}"></span>
+                <span class="item-name" onclick="openModal(${item.id})">${item.name}</span>
+              </div>
+              ${item.description ? `<div class="item-desc">${item.description}</div>` : ''}
+              <div class="item-price">${formatPrice(item.price)}</div>
+              <div class="item-meta">
+                <span class="item-rating" id="rating-${item.id}"></span>
+                <button class="like-btn ${like.liked?'liked':''}" id="like-btn-${item.id}" onclick="toggleLike(${item.id})">
+                  ♥ <span id="like-count-${item.id}">${like.count}</span>
+                </button>
+              </div>
+            </div>
+            <div class="item-action" id="action-${item.id}">
+              ${qty === 0
+                ? `<button class="add-btn" onclick="addItem(${item.id},'${esc(item.name)}',${item.price})">ADD</button>`
+                : `<div class="qty-control">
+                    <button class="qty-btn" onclick="decreaseItem(${item.id})">−</button>
+                    <div class="qty-num">${qty}</div>
+                    <button class="qty-btn" onclick="increaseItem(${item.id},'${esc(item.name)}',${item.price})">+</button>
+                  </div>`}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderItem(item) {
+      const inCart = cart.find(c => c.menu_item_id === item.id);
+      const qty = inCart ? inCart.quantity : 0;
+      const like = likeData[item.id] || { count: 0, liked: false };
+
+      return `
+        <div class="menu-item" id="item-${item.id}">
+          <div class="item-info">
+            <div class="item-header">
+              <span class="veg-dot ${item.is_veg?'veg':'nonveg'}"></span>
+              <span class="item-name" onclick="openModal(${item.id})">${item.name}</span>
+            </div>
+            ${item.description ? `<div class="item-desc">${item.description}</div>` : ''}
+            <div class="item-price">${formatPrice(item.price)}</div>
+            <div class="item-meta">
+              <span class="item-rating" id="rating-${item.id}"></span>
+              <button class="like-btn ${like.liked?'liked':''}" id="like-btn-${item.id}" onclick="toggleLike(${item.id})">
+                ♥ <span id="like-count-${item.id}">${like.count}</span>
+              </button>
+            </div>
+          </div>
+          <div class="item-action" id="action-${item.id}">
+            ${qty === 0
+              ? `<button class="add-btn" onclick="addItem(${item.id},'${esc(item.name)}',${item.price})">ADD</button>`
+              : `<div class="qty-control">
+                  <button class="qty-btn" onclick="decreaseItem(${item.id})">−</button>
+                  <div class="qty-num">${qty}</div>
+                  <button class="qty-btn" onclick="increaseItem(${item.id},'${esc(item.name)}',${item.price})">+</button>
+                </div>`}
+          </div>
+        </div>`;
+    }
+
+    function esc(str) { return str.replace(/'/g, "\\'"); }
+
+    function updateLikeUI(id) {
+      const l = likeData[id];
+      if (!l) return;
+      const btn = document.getElementById('like-btn-' + id);
+      const cnt = document.getElementById('like-count-' + id);
+      if (btn) btn.className = 'like-btn' + (l.liked ? ' liked' : '');
+      if (cnt) cnt.textContent = l.count;
+    }
+
+    function toggleLike(id) {
+      apiFetch('/reviews/like/' + id, { method: 'POST' }).then(data => {
+        likeData[id] = { count: data.count, liked: data.liked };
+        updateLikeUI(id);
+      }).catch(() => {});
+    }
+
+    function addItem(id, name, price) {
+      cart = getCart();
+      cart.push({ menu_item_id: id, name, price, quantity: 1 });
+      saveCart(cart); refreshItem(id, name, price); updateCartBar();
+    }
+    function increaseItem(id, name, price) {
+      cart = getCart();
+      const idx = cart.findIndex(c => c.menu_item_id === id);
+      if (idx > -1) cart[idx].quantity++;
+      saveCart(cart); refreshItem(id, name, price); updateCartBar();
+    }
+    function decreaseItem(id) {
+      cart = getCart();
+      const idx = cart.findIndex(c => c.menu_item_id === id);
+      if (idx > -1) { cart[idx].quantity--; if (cart[idx].quantity <= 0) cart.splice(idx, 1); }
+      saveCart(cart);
+      for (const cat of menuData) {
+        const item = cat.items.find(i => i.id === id);
+        if (item) { refreshItem(id, item.name, item.price); break; }
+      }
+      updateCartBar();
+    }
+
+    function refreshItem(id, name, price) {
+      cart = getCart();
+      const qty = (cart.find(c => c.menu_item_id === id) || {}).quantity || 0;
+      const el = document.getElementById('action-' + id);
+      if (!el) return;
+      if (qty === 0) {
+        el.innerHTML = `<button class="add-btn" onclick="addItem(${id},'${esc(name)}',${price})">ADD</button>`;
+      } else {
+        el.innerHTML = `<div class="qty-control">
+          <button class="qty-btn" onclick="decreaseItem(${id})">−</button>
+          <div class="qty-num">${qty}</div>
+          <button class="qty-btn" onclick="increaseItem(${id},'${esc(name)}',${price})">+</button>
+        </div>`;
+      }
+    }
+
+    function updateCartBar() {
+      cart = getCart();
+      const total = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+      const count = cart.reduce((s, i) => s + i.quantity, 0);
+      const bar = document.getElementById('cart-bar');
+      if (count === 0) { bar.style.display = 'none'; return; }
+      bar.style.display = 'block';
+      document.getElementById('cart-count-label').textContent = count + (count===1?' item':' items');
+      document.getElementById('cart-total-label').textContent = formatPrice(total) + '  →';
+    }
+
+    function scrollToSection(id, tabEl) {
+      document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+      tabEl.classList.add('active');
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function openModal(id) {
+      let item;
+      for (const cat of menuData) { item = cat.items.find(i => i.id === id); if (item) break; }
+      if (!item) return;
+      document.getElementById('modal-overlay').style.display = 'flex';
+      document.getElementById('modal-content').innerHTML = '<div class="loading">Loading reviews...</div>';
+
+      apiFetch('/reviews/' + id).then(data => {
+        const stars = s => '★'.repeat(s) + '☆'.repeat(5 - s);
+        const reviewsHTML = data.reviews.length === 0
+          ? '<div style="color:var(--text-muted);font-size:14px;padding:12px 0;">No reviews yet.</div>'
+          : data.reviews.map(r => `
+              <div class="review-card">
+                <div class="review-stars">${stars(r.stars)}</div>
+                ${r.comment ? `<div class="review-comment">${r.comment}</div>` : ''}
+                <div class="review-author">${r.phone_masked} · ${new Date(r.created_at).toLocaleDateString()}</div>
+              </div>`).join('');
+
+        document.getElementById('modal-content').innerHTML = `
+          <button class="modal-close" onclick="closeModalDirect()">×</button>
+          <div class="modal-title">${item.name}</div>
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">${formatPrice(item.price)}</div>
+          ${data.avg_stars ? `
+            <div class="avg-rating">
+              <span class="avg-num">${data.avg_stars}</span>
+              <div>
+                <div style="color:var(--star);font-size:14px;">${stars(Math.round(data.avg_stars))}</div>
+                <div class="avg-meta">${data.total} review${data.total!==1?'s':''}</div>
+              </div>
+            </div>` : '<div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">No ratings yet</div>'}
+          ${reviewsHTML}`;
+      }).catch(() => {
+        document.getElementById('modal-content').innerHTML = '<div class="loading">Could not load reviews.</div>';
+      });
+    }
+
+    function closeModal(e) { if (e.target === document.getElementById('modal-overlay')) closeModalDirect(); }
+    function closeModalDirect() { document.getElementById('modal-overlay').style.display = 'none'; }
+    function logout() { localStorage.clear(); window.location.href = '/'; }
+  </script>
+</body>
+</html>

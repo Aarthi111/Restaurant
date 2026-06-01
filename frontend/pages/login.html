@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Divya Restaurant</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- Hero -->
+  <div class="login-hero">
+    <div style="font-size:32px; margin-bottom:10px;">🍽</div>
+    <div class="restaurant-name">Divya</div>
+    <div class="restaurant-tagline">Pure Veg &amp; Non Veg</div>
+  </div>
+
+  <div class="login-body">
+
+    <!-- Step 1: Phone -->
+    <div id="step-phone">
+      <div class="login-title">Welcome</div>
+      <div class="login-sub">Login to place your order</div>
+
+      <div class="form-group">
+        <label for="phone">Mobile Number</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" value="+91" style="width:60px;flex-shrink:0;color:var(--text-muted);" readonly />
+          <input type="tel" id="phone" placeholder="9876543210" maxlength="10" inputmode="numeric" />
+        </div>
+        <div class="hint">We'll send a one-time password to this number.</div>
+      </div>
+      <button class="btn btn-primary" id="send-otp-btn" onclick="sendOTP()">Send OTP</button>
+      <div id="phone-error" class="error-msg"></div>
+    </div>
+
+    <!-- Step 2: OTP -->
+    <div id="step-otp" style="display:none;">
+      <div class="login-title">Enter OTP</div>
+      <div class="login-sub">Sent to <span id="display-phone" style="font-weight:700;color:var(--text);"></span></div>
+
+      <div class="form-group">
+        <label>6-Digit Code</label>
+        <div class="otp-inputs">
+          <input type="text" maxlength="1" inputmode="numeric" class="otp-digit" />
+          <input type="text" maxlength="1" inputmode="numeric" class="otp-digit" />
+          <input type="text" maxlength="1" inputmode="numeric" class="otp-digit" />
+          <input type="text" maxlength="1" inputmode="numeric" class="otp-digit" />
+          <input type="text" maxlength="1" inputmode="numeric" class="otp-digit" />
+          <input type="text" maxlength="1" inputmode="numeric" class="otp-digit" />
+        </div>
+      </div>
+      <button class="btn btn-primary" id="verify-otp-btn" onclick="verifyOTP()">Verify & Continue</button>
+      <div id="otp-error" class="error-msg"></div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-outline" onclick="backToPhone()">Change Number</button>
+      </div>
+      <div style="margin-top:12px; text-align:center;">
+        <span id="resend-timer" style="font-size:13px; color:var(--text-muted);"></span>
+        <button id="resend-btn" style="display:none;background:none;border:none;font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;color:var(--text);" onclick="resendOTP()">Resend OTP</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Theme toggle fixed bottom right -->
+  <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()" style="position:fixed;bottom:20px;right:20px;">☾</button>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    if (getToken()) { window.location.href = getTable() ? '/menu' : '/table'; }
+
+    let currentPhone = '';
+    let resendInterval = null;
+
+    function sendOTP() {
+      const phone = document.getElementById('phone').value.trim();
+      const err = document.getElementById('phone-error');
+      err.textContent = '';
+      if (!/^[6-9]\d{9}$/.test(phone)) { err.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+      const btn = document.getElementById('send-otp-btn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      apiFetch('/auth/send-otp', { method: 'POST', body: JSON.stringify({ phone }) })
+        .then(data => {
+          currentPhone = phone;
+          document.getElementById('display-phone').textContent = '+91 ' + phone;
+          document.getElementById('step-phone').style.display = 'none';
+          document.getElementById('step-otp').style.display = 'block';
+          document.querySelector('.otp-digit').focus();
+          startResendTimer();
+if (data.otp_preview) {
+  data.otp_preview.split('').forEach((d, i) => {
+    document.querySelectorAll('.otp-digit')[i].value = d;
+  });
+}
+        }).catch(e => { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Send OTP'; });
+    }
+
+    function verifyOTP() {
+      const digits = [...document.querySelectorAll('.otp-digit')].map(i => i.value).join('');
+      const err = document.getElementById('otp-error');
+      err.textContent = '';
+      if (digits.length !== 6) { err.textContent = 'Enter all 6 digits.'; return; }
+      const btn = document.getElementById('verify-otp-btn');
+      btn.disabled = true; btn.textContent = 'Verifying...';
+      apiFetch('/auth/verify-otp', { method: 'POST', body: JSON.stringify({ phone: currentPhone, otp: digits }) })
+        .then(data => {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify({ id: data.user_id, phone: currentPhone }));
+          window.location.href = '/table';
+        }).catch(e => { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Verify & Continue'; });
+    }
+
+    function backToPhone() {
+      clearInterval(resendInterval);
+      document.getElementById('step-otp').style.display = 'none';
+      document.getElementById('step-phone').style.display = 'block';
+      const btn = document.getElementById('send-otp-btn');
+      btn.disabled = false; btn.textContent = 'Send OTP';
+    }
+
+    function resendOTP() {
+      document.getElementById('resend-btn').style.display = 'none';
+      apiFetch('/auth/send-otp', { method: 'POST', body: JSON.stringify({ phone: currentPhone }) })
+        .then(() => startResendTimer())
+        .catch(e => { document.getElementById('otp-error').textContent = e.message; });
+    }
+
+    function startResendTimer() {
+      let s = 30;
+      const el = document.getElementById('resend-timer');
+      const btn = document.getElementById('resend-btn');
+      el.textContent = `Resend in ${s}s`;
+      clearInterval(resendInterval);
+      resendInterval = setInterval(() => {
+        s--;
+        if (s <= 0) { clearInterval(resendInterval); el.textContent = ''; btn.style.display = 'inline'; }
+        else el.textContent = `Resend in ${s}s`;
+      }, 1000);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const digits = document.querySelectorAll('.otp-digit');
+      digits.forEach((input, idx) => {
+        input.addEventListener('input', () => {
+          input.value = input.value.replace(/\D/, '');
+          if (input.value && idx < digits.length - 1) digits[idx + 1].focus();
+        });
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Backspace' && !input.value && idx > 0) digits[idx - 1].focus();
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Table — Restaurant</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <span class="topbar-title">Restaurant</span>
+    <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()">☾</button>
+  </div>
+
+  <div class="page">
+    <div class="page-header" style="margin-top:20px; margin-bottom:36px;">
+      <div class="page-title">Your Table</div>
+      <div class="page-subtitle">Enter the number written on your table</div>
+    </div>
+
+    <div class="form-group">
+      <label for="table-input">Table Number</label>
+      <input type="number" id="table-input" placeholder="e.g. 4" min="1" max="10" inputmode="numeric" />
+      <div class="hint">Tables available: 1 to 10</div>
+    </div>
+
+    <button class="btn btn-primary" onclick="confirmTable()">Continue</button>
+    <div id="table-error" class="error-msg"></div>
+
+    <div style="margin-top:20px;">
+      <button class="btn btn-outline" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    requireAuth();
+    if (getTable()) { window.location.href = '/menu'; }
+
+    function confirmTable() {
+      const val = document.getElementById('table-input').value.trim();
+      const err = document.getElementById('table-error');
+      err.textContent = '';
+      if (!val || isNaN(val) || parseInt(val) < 1) { err.textContent = 'Please enter a valid table number.'; return; }
+
+      const btn = event.target;
+      btn.disabled = true; btn.textContent = 'Checking...';
+
+      apiFetch('/menu/validate-table/' + parseInt(val))
+        .then(() => { localStorage.setItem('table_number', parseInt(val)); window.location.href = '/menu'; })
+        .catch(e => { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Continue'; });
+    }
+
+    function logout() { localStorage.clear(); window.location.href = '/'; }
+  </script>
+</body>
+</html>

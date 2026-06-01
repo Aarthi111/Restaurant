@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Order — Divya</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+
+  <div class="topbar">
+    <button onclick="window.location.href='/menu'" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text);">←</button>
+    <div class="topbar-title">Your Order</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="table-badge" id="table-label"></span>
+      <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()">☾</button>
+    </div>
+  </div>
+
+  <div class="page" style="padding-top:16px;">
+    <div id="cart-content"></div>
+  </div>
+
+  <div class="cart-bar" id="place-order-bar" style="display:none;">
+    <button class="btn btn-primary" id="place-order-btn" onclick="placeOrder()">Proceed to Pay</button>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    requireAuth();
+    requireTable();
+    const TAX_PERCENT = 5;
+    document.getElementById('table-label').textContent = 'Table ' + getTable();
+    renderCart();
+
+    function renderCart() {
+      const cart = getCart();
+      const container = document.getElementById('cart-content');
+
+      if (cart.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>Your cart is empty.</p>
+          <button class="btn btn-outline" onclick="window.location.href='/menu'">Browse Menu</button></div>`;
+        document.getElementById('place-order-bar').style.display = 'none';
+        return;
+      }
+
+      const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+      const tax = parseFloat((subtotal * TAX_PERCENT / 100).toFixed(2));
+      const total = parseFloat((subtotal + tax).toFixed(2));
+
+      container.innerHTML = `
+        ${cart.map(item => `
+          <div class="cart-item">
+            <div class="cart-item-info">
+              <div class="name">${item.name}</div>
+              <div class="price">${formatPrice(item.price)} each</div>
+            </div>
+            <div class="cart-item-right">
+              <div class="cart-item-total">${formatPrice(item.price * item.quantity)}</div>
+              <div class="qty-control">
+                <button class="qty-btn" onclick="decrease(${item.menu_item_id})">−</button>
+                <div class="qty-num">${item.quantity}</div>
+                <button class="qty-btn" onclick="increase(${item.menu_item_id})">+</button>
+              </div>
+            </div>
+          </div>`).join('')}
+        <div class="bill-summary">
+          <div class="bill-row"><span class="bill-label">Subtotal</span><span>${formatPrice(subtotal)}</span></div>
+          <div class="bill-row"><span class="bill-label">Tax (${TAX_PERCENT}%)</span><span>${formatPrice(tax)}</span></div>
+          <div class="bill-row total"><span class="bill-label">Total</span><span>${formatPrice(total)}</span></div>
+        </div>
+        <div style="height:80px;"></div>`;
+
+      document.getElementById('place-order-bar').style.display = 'block';
+    }
+
+    function increase(id) {
+      const cart = getCart();
+      const idx = cart.findIndex(c => c.menu_item_id === id);
+      if (idx > -1) cart[idx].quantity++;
+      saveCart(cart); renderCart();
+    }
+    function decrease(id) {
+      const cart = getCart();
+      const idx = cart.findIndex(c => c.menu_item_id === id);
+      if (idx > -1) { cart[idx].quantity--; if (cart[idx].quantity <= 0) cart.splice(idx, 1); }
+      saveCart(cart); renderCart();
+    }
+
+    function placeOrder() {
+      const cart = getCart();
+      if (!cart.length) return;
+      const btn = document.getElementById('place-order-btn');
+      btn.disabled = true; btn.textContent = 'Processing...';
+
+      apiFetch('/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          table_number: parseInt(getTable()),
+          items: cart.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity }))
+        })
+      }).then(data => {
+        // Open Razorpay checkout
+        const options = {
+          key: data.razorpay_key,
+          amount: Math.round(data.total * 100),
+          currency: 'INR',
+          name: 'Divya Restaurant',
+          description: `Table ${data.table_number} — Order #${data.order_id}`,
+          order_id: data.razorpay_order_id,
+          handler: function(response) {
+            // Payment successful
+            localStorage.setItem('last_order', JSON.stringify(data));
+            clearCart();
+            window.location.href = '/confirmation';
+          },
+          prefill: { contact: getUser()?.phone || '' },
+          theme: { color: '#111111' },
+          modal: {
+            ondismiss: function() {
+              btn.disabled = false;
+              btn.textContent = 'Proceed to Pay';
+            }
+          }
+        };
+        const rzp = new Razorpay(options);
+        rzp.open();
+      }).catch(e => {
+        btn.disabled = false;
+        btn.textContent = 'Proceed to Pay';
+        alert('Error: ' + e.message);
+      });
+    }
+  </script>
+</body>
+</html>
