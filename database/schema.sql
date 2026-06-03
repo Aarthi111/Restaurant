@@ -128,3 +128,23 @@ CREATE TABLE IF NOT EXISTS food_reviews (
   FOREIGN KEY (menu_item_id) REFERENCES menu_items(id),
   FOREIGN KEY (order_id) REFERENCES orders(id)
 );
+
+-- ── Indexes ──────────────────────────────────
+
+CREATE INDEX idx_otp_phone_used ON otp_verifications (phone, used, expires_at);
+
+CREATE INDEX idx_menu_category ON menu_items (category_id, is_available);
+
+CREATE INDEX idx_orders_user ON orders (user_id);
+
+CREATE INDEX idx_orders_table ON orders (table_number);
+
+CREATE INDEX idx_order_items_order ON order_items (order_id);
+
+CREATE INDEX idx_order_items_menu_item ON order_items (menu_item_id);
+
+CREATE INDEX idx_likes_menu_item ON food_likes (menu_item_id);
+
+CREATE INDEX idx_reviews_menu_item ON food_reviews (menu_item_id);
+
+CREATE INDEX idx_reviews_user ON food_reviews (user_id, menu_item_id);
