@@ -15,7 +15,7 @@ app.use('/api/menu', require('./routes/menu'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/reviews', require('./routes/reviews'));
 
-// Serve frontend pages
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../frontend/pages/login.html')));
 app.get('/table', (req, res) => res.sendFile(path.join(__dirname, '../frontend/pages/table.html')));
 app.get('/menu', (req, res) => res.sendFile(path.join(__dirname, '../frontend/pages/menu.html')));

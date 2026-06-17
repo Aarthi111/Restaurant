@@ -61,10 +61,10 @@ CREATE TABLE IF NOT EXISTS order_items (
   FOREIGN KEY (menu_item_id) REFERENCES menu_items(id)
 );
 
--- Seed tables
+
 INSERT IGNORE INTO tables_list (table_number) VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
 
--- Seed categories
+
 INSERT IGNORE INTO categories (id, name) VALUES
 (1, 'Starters'),
 (2, 'Main Course'),
@@ -73,7 +73,7 @@ INSERT IGNORE INTO categories (id, name) VALUES
 (5, 'Desserts'),
 (6, 'Drinks');
 
--- Seed menu items
+
 INSERT IGNORE INTO menu_items (name, description, price, category_id, is_veg) VALUES
 ('Veg Spring Roll', 'Crispy rolls with mixed vegetables', 120.00, 1, TRUE),
 ('Paneer Tikka', 'Grilled cottage cheese with spices', 180.00, 1, TRUE),
@@ -103,7 +103,7 @@ INSERT IGNORE INTO menu_items (name, description, price, category_id, is_veg) VA
 ('Fresh Lime Soda', 'Sweet or salted', 60.00, 6, TRUE),
 ('Lassi', 'Sweet or salted yogurt drink', 80.00, 6, TRUE);
 
--- Food likes
+
 CREATE TABLE IF NOT EXISTS food_likes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS food_likes (
   FOREIGN KEY (menu_item_id) REFERENCES menu_items(id)
 );
 
--- Food reviews (only after ordering)
+
 CREATE TABLE IF NOT EXISTS food_reviews (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS food_reviews (
   FOREIGN KEY (order_id) REFERENCES orders(id)
 );
 
--- ── Indexes ──────────────────────────────────
+
 
 CREATE INDEX idx_otp_phone_used ON otp_verifications (phone, used, expires_at);
 
